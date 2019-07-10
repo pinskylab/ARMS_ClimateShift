@@ -1,0 +1,49 @@
+---
+title: "Shift_Map"
+output: html_notebook
+---
+
+```{r setup}
+library(data.table)
+library(raster)
+library(rgdal)
+library(maptools)
+library(mapdata)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ggmap)
+library(maps)
+library(sf)
+library(rnaturalearth)
+library(rnaturalearthdata)
+
+```
+
+```{r import data}
+depth <- as.data.table(read.csv("data/poloczanska2013NCC/nceas.999.1_depth.csv"))
+range <- as.data.table(read.csv("data/poloczanska2016frontiersmarinescience/table 2_cleaned.csv"))
+
+#just lat and long for depth
+depth_latlong <- depth[, c("lat", "long")][, type := "depth"]
+range_latlong <- range[, c("Latitude", "Longitude")][, type := "range"]
+setnames(range_latlong, old=c("Latitude","Longitude"), new=c("lat", "long"))
+
+latlong_all <- rbind(depth_latlong, range_latlong)
+
+```
+
+```{r map}
+world_map <- map_data("world")
+
+ggplot(world_map) +
+  geom_polygon(aes(x=long, y=lat, group = group), fill = "lightgray") +
+  labs(color = "Legend:") +
+  geom_point(data = range_latlong, aes(x=long, y=lat, col = "skyblue"), size = 2) +
+  geom_point(data = depth_latlong, aes(x=long, y=lat, col = "darksalmon"), size = 2) +
+  theme(legend.position = "right") +
+  scale_color_manual(name = "Shift Type", values = c("skyblue", "darksalmon"),
+                       labels = c("Latitudinal Range", "Depth Range")) +
+  theme_void()
+
+```
