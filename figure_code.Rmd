@@ -38,7 +38,7 @@ latlong_all <- rbind(depth_latlong, range_latlong)
 ```{r map}
 world_map <- map_data("world")
 
-ggplot(world_map) +
+map1 <- ggplot(world_map) +
   geom_polygon(aes(x=long, y=lat, group = group), fill = "lightgray") +
   labs(color = "Legend:") +
   geom_point(data = range_latlong, aes(x=long, y=lat, col = "aquamarine3"), size = 2) +
@@ -47,6 +47,10 @@ ggplot(world_map) +
   scale_color_manual(name = "Shift Type", values = c("aquamarine3", "orchid3"),
                        labels = c("Latitudinal Range", "Depth Range")) +
   theme_void()
+
+ggsave("map1.png", plot = map1, device = NULL, path = "draft_figures")
+
+map1
 
 ```
 
@@ -71,12 +75,42 @@ range_shift_summaries <- range_shift %>%
   mutate(label = paste0(Range.edge, '\nN = ', n))
 range_shift_summaries
 
-ggplot(data = range_shift_summaries, aes(x=factor(label), y = freq, col = tempchange)) +
-  geom_point() +
-  scale_color_manual(values = c("blue", "green", "red")) +
+plot2 <- ggplot(data = range_shift_summaries, aes(x=Range.edge, y = freq, fill = tempchange)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c("cornflowerblue", "darkolivegreen3", "indianred2")) +
   labs(x = "Focal Range Edge", y = "Proportion of Species") +
+  geom_text(aes(label = n), position = position_stack(vjust = 0.5)) +
   theme_bw()
+
+ggsave("plot2.png", plot = plot2, device = NULL, path = "draft_figures")
+
+plot2
 
 
 ```
+Proportion of species bar plots. We will only need Deep/Shallower
+```{r barplots depth}
+depth_shift <- depth[,c("Deeper_shallower")][complete.cases(depth[,"Deeper_shallower"])]
+depth_shift[, tempchange := ifelse(Deeper_shallower == "Deeper", "cooler", ifelse(Deeper_shallower == "Shallower", "warmer", "nochange"))]
 
+depth_shift_summaries <- depth_shift %>%
+  group_by(Deeper_shallower, tempchange) %>%
+  summarize(n=n()) %>%
+  mutate(freq = n/nrow(depth_shift)) %>%
+  mutate(label = paste0(Deeper_shallower, '\nN = ', n))
+depth_shift_summaries <- as.data.table(depth_shift_summaries)
+
+#add dummy x variable for single stack
+depth_shift_summaries[, Depth := "depth"]
+head(depth_shift_summaries)
+
+plot3 <- ggplot(data = depth_shift_summaries, aes(x = Depth, y = freq, fill = tempchange)) +
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values = c("cornflowerblue", "darkolivegreen3", "indianred2")) +
+  labs(x = "Depth", y = "Proportion of Species") +
+  geom_text(aes(label = n), position = position_stack(vjust = 0.5)) +
+  theme_bw()
+plot3
+ggsave("plot3.png", plot = plot3, device = NULL, path = "draft_figures")
+depth_shift_summaries
+```
