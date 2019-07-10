@@ -48,7 +48,7 @@ map1 <- ggplot(world_map) +
                        labels = c("Latitudinal Range", "Depth Range")) +
   theme_void()
 
-ggsave("map1.png", plot = map1, device = NULL, path = "draft_figures")
+ggsave("map1.png", plot = map1, device = NULL, path = "draft_figures", width = 2)
 
 map1
 
@@ -82,7 +82,7 @@ plot2 <- ggplot(data = range_shift_summaries, aes(x=Range.edge, y = freq, fill =
   geom_text(aes(label = n), position = position_stack(vjust = 0.5)) +
   theme_bw()
 
-ggsave("plot2.png", plot = plot2, device = NULL, path = "draft_figures")
+ggsave("plot2.png", plot = plot2, device = NULL, path = "draft_figures", width = 2)
 
 plot2
 
@@ -111,6 +111,6 @@ plot3 <- ggplot(data = depth_shift_summaries, aes(x = Depth, y = freq, fill = te
   geom_text(aes(label = n), position = position_stack(vjust = 0.5)) +
   theme_bw()
 plot3
-ggsave("plot3.png", plot = plot3, device = NULL, path = "draft_figures")
+ggsave("plot3.png", plot = plot3, device = NULL, path = "draft_figures", width = 2)
 depth_shift_summaries
 ```
