@@ -23,6 +23,8 @@ library(rnaturalearthdata)
 ```{r import data}
 depth <- as.data.table(read.csv("data/poloczanska2013NCC/nceas.999.1_depth.csv"))
 range <- as.data.table(read.csv("data/poloczanska2016frontiersmarinescience/table 2_cleaned.csv"))
+range[grepl("trailing", Range.edge), Range.edge := "Trailing"]
+summary(range)
 
 #just lat and long for depth
 depth_latlong <- depth[, c("lat", "long")][, type := "depth"]
@@ -47,3 +49,12 @@ ggplot(world_map) +
   theme_void()
 
 ```
+
+Proportion of species bar plots. We will only need Range.edge and Shift
+```{r barplots range}
+range_shift <- range[,c("Range.edge", "Shift")][complete.cases(range[,"Shift"])][,Range.edge := factor(Range.edge)]
+table(range_shift$Range.edge, range_shift$Shift)
+range_shift[, cooler := ifelse((Range.edge == leading & Shift == expansion)|Range .edge == Trailing , 1, 0)]
+
+```
+
