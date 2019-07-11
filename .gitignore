@@ -1,4 +1,13 @@
+# ignore R files
 .Rproj.user
 .Rhistory
 .RData
 .Ruserdata
+
+# ignore Excel files
+~$*.xls*
+.xls*
+
+# ignore strange Mac files
+.DS_Store
+
