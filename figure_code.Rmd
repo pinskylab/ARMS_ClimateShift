@@ -15,8 +15,7 @@ library(ggplot2)
 library(ggmap)
 library(maps)
 library(sf)
-library(rnaturalearth)
-library(rnaturalearthdata)
+
 
 ```
 
@@ -24,6 +23,7 @@ library(rnaturalearthdata)
 depth <- as.data.table(read.csv("data/poloczanska2013NCC/nceas.999.1_depth.csv"))
 range <- as.data.table(read.csv("data/poloczanska2016frontiersmarinescience/table 2_cleaned.csv"))
 range[grepl("trailing", Range.edge), Range.edge := "Trailing"]
+range$Range.edge <- factor(range$Range.edge)
 summary(range)
 
 #just lat and long for depth
@@ -36,10 +36,12 @@ latlong_all <- rbind(depth_latlong, range_latlong)
 ```
 
 ```{r map}
+library(mapproj)
 world_map <- map_data("world")
 
 map1 <- ggplot(world_map) +
   geom_polygon(aes(x=long, y=lat, group = group), fill = "lightgray") +
+  coord_map("albers") +
   labs(color = "Legend:") +
   geom_point(data = range_latlong, aes(x=long, y=lat, col = "aquamarine3"), size = 2) +
   geom_point(data = depth_latlong, aes(x=long, y=lat, col = "orchid3"), size = 2) +
@@ -48,9 +50,10 @@ map1 <- ggplot(world_map) +
                        labels = c("Latitudinal Range", "Depth Range")) +
   theme_void()
 
+map1
+
 ggsave("map1.png", plot = map1, device = NULL, path = "draft_figures")
 
-map1
 
 ```
 
@@ -63,7 +66,7 @@ range_shift[, cooler := ifelse(((Range.edge == "Leading" & Shift == "expansion")
 range_shift[, warmer := ifelse(((Range.edge == "Leading" & Shift == "contraction")|(Range.edge == "Centre" & Shift == "contraction") | (Range.edge == "Trailing" & Shift == "expansion")) , 1, 0)]
 
 range_shift[, nochange := ifelse(Shift == "no change", 1, 0)]
-range_shift[, tempchange := as.factor(ifelse(cooler == 1, "cooler", ifelse(warmer == 1, "warmer", "nochange")))]
+range_shift[, tempchange := as.factor(ifelse(cooler == 1, "Towards cooler", ifelse(warmer == 1, "Towards warmer", "No change")))]
 
 
 table(range_shift$Range.edge, range_shift$Shift, range_shift$tempchange)
@@ -71,46 +74,94 @@ table(range_shift$Range.edge, range_shift$Shift, range_shift$tempchange)
 range_shift_summaries <- range_shift %>%
   group_by(Range.edge, tempchange) %>%
   summarize(n=n()) %>%
-  mutate(freq = n / sum(n)) %>%
-  mutate(label = paste0(Range.edge, '\nN = ', n))
-range_shift_summaries
+  mutate(freq = n / sum(n))
 
-plot2 <- ggplot(data = range_shift_summaries, aes(x=Range.edge, y = freq, fill = tempchange)) +
-  geom_bar(stat = "identity") +
+#we want non-expansions (no change or contraction) to be below x axis, so these frequencies must be negative
+#using data.table
+range_shift_summaries <- as.data.table(range_shift_summaries)
+range_shift_summaries[, "freq.posneg" := ifelse(tempchange == "Towards warmer" | tempchange == "No change", as.numeric(paste0(freq*(-1))), as.numeric(paste0(freq)))]
+range_shift_summaries[, "x.label" := ifelse(Range.edge == "Leading", paste0("Leading \nn=", length(which(range_shift$Range.edge == "Leading"))), 
+                                            ifelse(Range.edge == "Trailing", paste0("Trailing \nn=", length(which(range_shift$Range.edge == "Trailing"))), 
+                                                   paste0("Centre \nn=", length(which(range_shift$Range.edge == "Centre"))))
+                                            )
+                      ]
+#to help with x axis labeling
+range_shift_summaries$x.label <- as.factor(range_shift_summaries$x.label)
+x.label.levels <- levels(range_shift_summaries$x.label)
+
+#to reorder coloring in plot for stacks of towards temp changes
+range_shift_summaries$tempchange <- factor(range_shift_summaries$tempchange, levels = c("Towards cooler","No change","Towards warmer"))
+
+#make barplot
+#to rearrange order of bars
+range_shift_summaries$Range.edge <- factor(range_shift_summaries$Range.edge, levels = c("Trailing", "Centre", "Leading"))
+
+plot2 <- ggplot(data = range_shift_summaries, aes(x=Range.edge, y = freq.posneg, fill = tempchange)) +
+  geom_bar(stat = "identity", width = 0.7) +
   scale_fill_manual(values = c("cornflowerblue", "darkolivegreen3", "indianred2")) +
-  labs(x = "Focal Range Edge", y = "Proportion of Species") +
-  geom_text(aes(label = n), position = position_stack(vjust = 0.5)) +
-  theme_bw()
-
-ggsave("plot2.png", plot = plot2, path = "draft_figures")
+  labs(x = "Focal Range Edge", y = "Proportion Not Expanding | Proportion Expanding       ") +
+  guides(fill = FALSE) +
+  geom_hline(yintercept = 0, col = "black", size = 1) +
+  theme_classic() +
+  scale_y_continuous(limits = c(-1,1), label = c("1", "0.5", "0", "0.5", "1")) +
+  coord_fixed(ratio = 1.7) +
+  scale_x_discrete(labels = c(x.label.levels[3], x.label.levels[1], x.label.levels[2])) +
+  theme(axis.text = element_text(color = "black", size = 13),  
+        axis.title = element_text(color = "black", size = 12),
+        legend.title = element_text(color = "black", size = 13, face = 2),
+        legend.text = element_text(color = "black", size = 13))
 
 plot2
+
+ggsave("plot2.png", plot = plot2, path = "draft_figures")
+#Parking lot
+#if we want to have a n for every subgroup
+#geom_text(aes(label = n), position = position_stack(vjust = 0.5)) +
+
 
 
 ```
 Proportion of species bar plots. We will only need Deep/Shallower
 ```{r barplots depth}
 depth_shift <- depth[,c("Deeper_shallower")][complete.cases(depth[,"Deeper_shallower"])]
-depth_shift[, tempchange := ifelse(Deeper_shallower == "Deeper", "cooler", ifelse(Deeper_shallower == "Shallower", "warmer", "nochange"))]
+depth_shift[, tempchange := ifelse(Deeper_shallower == "Deeper", "Cooler", ifelse(Deeper_shallower == "Shallower", "Warmer", "No change"))]
 
 depth_shift_summaries <- depth_shift %>%
   group_by(Deeper_shallower, tempchange) %>%
   summarize(n=n()) %>%
   mutate(freq = n/nrow(depth_shift)) %>%
   mutate(label = paste0(Deeper_shallower, '\nN = ', n))
+
 depth_shift_summaries <- as.data.table(depth_shift_summaries)
+depth_shift_summaries[, "freq.posneg" := ifelse(tempchange == "Warmer" | tempchange == "No change", as.numeric(paste0(freq*(-1))), as.numeric(paste0(freq)))]
 
 #add dummy x variable for single stack
 depth_shift_summaries[, Depth := "depth"]
 head(depth_shift_summaries)
 
-plot3 <- ggplot(data = depth_shift_summaries, aes(x = Depth, y = freq, fill = tempchange)) +
-  geom_bar(stat = "identity") +
+plot3 <- ggplot(data = depth_shift_summaries, aes(x = Depth, y = freq.posneg, fill = tempchange)) +
+  geom_bar(stat = "identity", width = 0.6) +
   scale_fill_manual(values = c("cornflowerblue", "darkolivegreen3", "indianred2")) +
-  labs(x = "Depth", y = "Proportion of Species") +
-  geom_text(aes(label = n), position = position_stack(vjust = 0.5)) +
-  theme_bw()
+  labs(x = "Depth \nn= 106", y = "Proportion Not Expanding | Proportion Expanding       ", fill = "Direction of \nMovement") +
+  geom_hline(yintercept = 0, col = "black", size = 1) +
+  theme_classic() +
+  scale_y_continuous(limits = c(-1,1), label = c("1", "0.5", "0", "0.5", "1")) +
+  scale_x_discrete(label = c(" ")) +
+  coord_fixed(ratio = 1.5) +
+  theme(axis.text.y = element_text(color = "black", size = 13),  
+        axis.text.x = element_text(color = "black", size = 13),
+        axis.ticks.x = element_blank(),
+        axis.title.x = element_text(color = "black", size = 12),
+        axis.title.y = element_blank(),
+        legend.title = element_text(color = "black", size = 13, face = 2),
+        legend.text = element_text(color = "black", size = 13))
 plot3
+
 ggsave("plot3.png", plot = plot3, path = "draft_figures")
-depth_shift_summaries
 ```
+Combine maps and plots into one
+```{r merging}
+library(cowplot)
+plot_grid(plot2, plot3, labels = c('B', 'C'), label_size = 12)
+```
+
