@@ -37,7 +37,33 @@ latlong_all <- rbind(depth_latlong, range_latlong)
 
 ```{r map}
 library(mapproj)
-world_map <- map_data("world")
+library(sp)
+library(rworldmap)
+
+world <- fortify(spTransform(getMap(), CRS("+proj=wintri")))
+
+coordinates(range_latlong)=~long+lat
+proj4string(range_latlong)<- CRS("+proj=longlat +datum=WGS84")
+range_latlong.t <- spTransform(range_latlong, CRS("+proj=wintri"))
+range_latlong.t <- coordinates(range_latlong.t)
+
+coordinates(depth_latlong)=~long+lat
+proj4string(depth_latlong)<- CRS("+proj=longlat +datum=WGS84")
+depth_latlong.t <- spTransform(depth_latlong, CRS("+proj=wintri"))
+depth_latlong.t <- coordinates(depth_latlong.t)
+
+ 
+map1 <- ggplot() +
+  geom_map(data=world, map=world,
+                    aes(x=long, y=lat, map_id=id),
+                    color=NA, fill="lightgray") +
+   labs(color = "Legend:") +
+  geom_point(data = as.data.frame(range_latlong.t), aes(x=long, y=lat, col = "aquamarine3"), size = 2) +
+  geom_point(data = as.data.frame(depth_latlong.t), aes(x=long, y=lat, col = "orchid3"), size = 2) +
+  theme(legend.position = "right") +
+  scale_color_manual(name = "Shift Type", values = c("aquamarine3", "orchid3"),
+                       labels = c("Latitudinal Range", "Depth Range")) +
+  theme_void()
 
 map1 <- ggplot(world_map) +
   geom_polygon(aes(x=long, y=lat, group = group), fill = "lightgray") +
@@ -99,7 +125,7 @@ range_shift_summaries$Range.edge <- factor(range_shift_summaries$Range.edge, lev
 plot2 <- ggplot(data = range_shift_summaries, aes(x=Range.edge, y = freq.posneg, fill = tempchange)) +
   geom_bar(stat = "identity", width = 0.7) +
   scale_fill_manual(values = c("cornflowerblue", "darkolivegreen3", "indianred2")) +
-  labs(x = "Focal Range Edge", y = "Proportion Not Expanding | Proportion Expanding       ") +
+  labs(x = "Focal Range Edge", y = "Proportion \nNot Expanding    |    Expanding      ") +
   guides(fill = FALSE) +
   geom_hline(yintercept = 0, col = "black", size = 1) +
   theme_classic() +
@@ -142,15 +168,14 @@ head(depth_shift_summaries)
 plot3 <- ggplot(data = depth_shift_summaries, aes(x = Depth, y = freq.posneg, fill = tempchange)) +
   geom_bar(stat = "identity", width = 0.6) +
   scale_fill_manual(values = c("cornflowerblue", "darkolivegreen3", "indianred2")) +
-  labs(x = "Depth \nn= 106", y = "Proportion Not Expanding | Proportion Expanding       ", fill = "Direction of \nMovement") +
+  labs(x = "  ", y = "Proportion \nNot Expanding    |   Expanding    ", fill = "Direction of \nMovement") +
   geom_hline(yintercept = 0, col = "black", size = 1) +
   theme_classic() +
   scale_y_continuous(limits = c(-1,1), label = c("1", "0.5", "0", "0.5", "1")) +
-  scale_x_discrete(label = c(" ")) +
-  coord_fixed(ratio = 1.5) +
+  scale_x_discrete(label = c("Depth \nN=106\n")) +
+  coord_fixed(ratio = 1.7) +
   theme(axis.text.y = element_text(color = "black", size = 13),  
         axis.text.x = element_text(color = "black", size = 13),
-        axis.ticks.x = element_blank(),
         axis.title.x = element_text(color = "black", size = 12),
         axis.title.y = element_blank(),
         legend.title = element_text(color = "black", size = 13, face = 2),
@@ -162,6 +187,24 @@ ggsave("plot3.png", plot = plot3, path = "draft_figures")
 Combine maps and plots into one
 ```{r merging}
 library(cowplot)
-plot_grid(plot2, plot3, labels = c('B', 'C'), label_size = 12)
+library(grid)
+library(gridExtra)
+library(ggpubr)
+plot_grid(plot2, plot3, labels = c('B', 'C'), nrow = 1, ncol = 2, rel_heights = c(1/1, 1/1))
+grid.newpage()
+grid.draw(ggplotGrob(plot2), ggplotGrob(plot3))
+row2<-grid.arrange(plot2, plot3, ncol = 2)
+
+ggarrange(plot2, plot3, ncol = 2, align = "v")
+plot_grid(map1, plot2, plot3, labels = c('B', 'C'), align = "v", nrow = 2, ncol = 2, rel_heights = c(1/2, 1/4, 1/4))
+
+ggarrange(map1,                                                 # First row with scatter plot
+          ggarrange(plot2, plot3, labels = c("B", "C")), # Second row with box and dot plots
+          nrow = 2, 
+          labels = "A"                                        # Labels of the scatter plot
+          ) 
+
+grid.arrange(map1, plot2, plot3, nrow = 2, 
+             layout_matrix = rbind(c(1,1), c(2,3)))
 ```
 
