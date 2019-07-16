@@ -3,7 +3,7 @@ title: "Shift_Map"
 output: html_notebook
 ---
 
-```{r setup}
+```{r setup, echo = F}
 library(data.table)
 library(raster)
 library(rgdal)
@@ -16,15 +16,14 @@ library(ggmap)
 library(maps)
 library(sf)
 
-
 ```
 
+Import data
 ```{r import data}
 depth <- as.data.table(read.csv("data/poloczanska2013NCC/nceas.999.1_depth.csv"))
 range <- as.data.table(read.csv("data/poloczanska2016frontiersmarinescience/table 2_cleaned.csv"))
-range[grepl("trailing", Range.edge), Range.edge := "Trailing"]
-range$Range.edge <- factor(range$Range.edge)
-summary(range)
+range[grepl("trailing", Range.edge), Range.edge := "Trailing"] #fixing lack of consistency in capitalization
+range$Range.edge <- factor(range$Range.edge) #making range.edge a factor
 
 #just lat and long for depth
 depth_latlong <- depth[, c("lat", "long")][, type := "depth"]
@@ -35,21 +34,27 @@ latlong_all <- rbind(depth_latlong, range_latlong)
 
 ```
 
+First, we will make a map with points where data are from, with colors for range vs. depth shifts. 
+
 ```{r map}
 library(mapproj)
 library(sp)
 library(rworldmap)
 
-world <- fortify(spTransform(getMap(), CRS("+proj=wintri")))
+#cannot run below more than once
+#coordinates(range_latlong)=~long+lat
+#coordinates(depth_latlong)=~long+lat
 
-coordinates(range_latlong)=~long+lat
+world <- fortify(spTransform(getMap(), CRS("+proj=eck4")))
+world <- subset(world, group != "Antarctica.1")
+
+
 proj4string(range_latlong)<- CRS("+proj=longlat +datum=WGS84")
-range_latlong.t <- spTransform(range_latlong, CRS("+proj=wintri"))
+range_latlong.t <- spTransform(range_latlong, CRS("+proj=eck4"))
 range_latlong.t <- coordinates(range_latlong.t)
 
-coordinates(depth_latlong)=~long+lat
 proj4string(depth_latlong)<- CRS("+proj=longlat +datum=WGS84")
-depth_latlong.t <- spTransform(depth_latlong, CRS("+proj=wintri"))
+depth_latlong.t <- spTransform(depth_latlong, CRS("+proj=eck4"))
 depth_latlong.t <- coordinates(depth_latlong.t)
 
  
@@ -58,25 +63,20 @@ map1 <- ggplot() +
                     aes(x=long, y=lat, map_id=id),
                     color=NA, fill="lightgray") +
    labs(color = "Legend:") +
-  geom_point(data = as.data.frame(range_latlong.t), aes(x=long, y=lat, col = "aquamarine3"), size = 2) +
-  geom_point(data = as.data.frame(depth_latlong.t), aes(x=long, y=lat, col = "orchid3"), size = 2) +
-  theme(legend.position = "right") +
+  geom_point(data = as.data.frame(range_latlong.t), aes(x=long, y=lat, col = "aquamarine3"), size = 1.3) +
+  geom_point(data = as.data.frame(depth_latlong.t), aes(x=long, y=lat, col = "orchid3"), size = 1.3) +
+  coord_map("rectangular", lat0=0) +
   scale_color_manual(name = "Shift Type", values = c("aquamarine3", "orchid3"),
                        labels = c("Latitudinal Range", "Depth Range")) +
-  theme_void()
-
-map1 <- ggplot(world_map) +
-  geom_polygon(aes(x=long, y=lat, group = group), fill = "lightgray") +
-  coord_map("albers") +
-  labs(color = "Legend:") +
-  geom_point(data = range_latlong, aes(x=long, y=lat, col = "aquamarine3"), size = 2) +
-  geom_point(data = depth_latlong, aes(x=long, y=lat, col = "orchid3"), size = 2) +
-  theme(legend.position = "right") +
-  scale_color_manual(name = "Shift Type", values = c("aquamarine3", "orchid3"),
-                       labels = c("Latitudinal Range", "Depth Range")) +
-  theme_void()
+  theme_void() +
+  theme(legend.position = "right",
+        legend.title = element_text(size = 13, face = 2),
+        legend.text = element_text(size = 12)) +
+  guides(colour = guide_legend(override.aes = list(size=3)))
 
 map1
+
+
 
 ggsave("map1.png", plot = map1, device = NULL, path = "draft_figures")
 
@@ -84,19 +84,19 @@ ggsave("map1.png", plot = map1, device = NULL, path = "draft_figures")
 ```
 
 Proportion of species bar plots. We will only need Range.edge and Shift
-```{r barplots range}
-range_shift <- range[,c("Range.edge", "Shift")][complete.cases(range[,"Shift"])][,Range.edge := factor(Range.edge)]
-table(range_shift$Range.edge, range_shift$Shift)
-range_shift[, cooler := ifelse(((Range.edge == "Leading" & Shift == "expansion")|(Range.edge == "Centre" & Shift == "expansion") | (Range.edge == "Trailing" & Shift == "contraction")) , 1, 0)]
+```{r data manipulation for range}
+range_shift <- range[,c("Range.edge", "Shift")][,Range.edge := factor(Range.edge)] #only need range edge and shift columns, and range.edge should be a factor
 
-range_shift[, warmer := ifelse(((Range.edge == "Leading" & Shift == "contraction")|(Range.edge == "Centre" & Shift == "contraction") | (Range.edge == "Trailing" & Shift == "expansion")) , 1, 0)]
+table(range_shift$Range.edge, range_shift$Shift) #gives us numbers for each shift/range.edge combo
 
-range_shift[, nochange := ifelse(Shift == "no change", 1, 0)]
-range_shift[, tempchange := as.factor(ifelse(cooler == 1, "Towards cooler", ifelse(warmer == 1, "Towards warmer", "No change")))]
+range_shift[, cooler := ifelse(((Range.edge == "Leading" & Shift == "expansion")|(Range.edge == "Centre" & Shift == "expansion") | (Range.edge == "Trailing" & Shift == "contraction")) , 1, 0)] #if leading range edge and expansion OR centre range edge and expansion OR trailing range edge and contraction, it's moving towards cooler
 
+range_shift[, warmer := ifelse(((Range.edge == "Leading" & Shift == "contraction")|(Range.edge == "Centre" & Shift == "contraction") | (Range.edge == "Trailing" & Shift == "expansion")) , 1, 0)] #if leading range edge and contraction OR centre range edge and contraction OR trailing range edge and expansion, it's moving towards warmer
 
-table(range_shift$Range.edge, range_shift$Shift, range_shift$tempchange)
+range_shift[, nochange := ifelse(Shift == "no change", 1, 0)] #if it's not contracting or expanding, it's not moving towards a temperature change
+range_shift[, tempchange := as.factor(ifelse(cooler == 1, "Towards cooler", ifelse(warmer == 1, "Towards warmer", "No change")))] #putting cooler, warmer, no change into one column
 
+#gives us proportions
 range_shift_summaries <- range_shift %>%
   group_by(Range.edge, tempchange) %>%
   summarize(n=n()) %>%
@@ -115,12 +115,16 @@ range_shift_summaries[, "x.label" := ifelse(Range.edge == "Leading", paste0("Lea
 range_shift_summaries$x.label <- as.factor(range_shift_summaries$x.label)
 x.label.levels <- levels(range_shift_summaries$x.label)
 
-#to reorder coloring in plot for stacks of towards temp changes
+#to reorder coloring in plot for stacks of towards temp changes (cooler = blue, etc.)
 range_shift_summaries$tempchange <- factor(range_shift_summaries$tempchange, levels = c("Towards cooler","No change","Towards warmer"))
 
-#make barplot
-#to rearrange order of bars
+#to rearrange order of bars (centre in middle)
 range_shift_summaries$Range.edge <- factor(range_shift_summaries$Range.edge, levels = c("Trailing", "Centre", "Leading"))
+
+```
+
+Making barplot
+```{r barplot for range}
 
 plot2 <- ggplot(data = range_shift_summaries, aes(x=Range.edge, y = freq.posneg, fill = tempchange)) +
   geom_bar(stat = "identity", width = 0.7) +
@@ -140,6 +144,7 @@ plot2 <- ggplot(data = range_shift_summaries, aes(x=Range.edge, y = freq.posneg,
 plot2
 
 ggsave("plot2.png", plot = plot2, path = "draft_figures")
+
 #Parking lot
 #if we want to have a n for every subgroup
 #geom_text(aes(label = n), position = position_stack(vjust = 0.5)) +
@@ -147,9 +152,10 @@ ggsave("plot2.png", plot = plot2, path = "draft_figures")
 
 
 ```
-Proportion of species bar plots. We will only need Deep/Shallower
-```{r barplots depth}
-depth_shift <- depth[,c("Deeper_shallower")][complete.cases(depth[,"Deeper_shallower"])]
+
+Data manipulation for depth barplots
+```{r data manip for depth}
+depth_shift <- depth[,c("Deeper_shallower")]
 depth_shift[, tempchange := ifelse(Deeper_shallower == "Deeper", "Cooler", ifelse(Deeper_shallower == "Shallower", "Warmer", "No change"))]
 
 depth_shift_summaries <- depth_shift %>%
@@ -163,8 +169,10 @@ depth_shift_summaries[, "freq.posneg" := ifelse(tempchange == "Warmer" | tempcha
 
 #add dummy x variable for single stack
 depth_shift_summaries[, Depth := "depth"]
-head(depth_shift_summaries)
+```
 
+Making barplot
+```{r barplots for depth}
 plot3 <- ggplot(data = depth_shift_summaries, aes(x = Depth, y = freq.posneg, fill = tempchange)) +
   geom_bar(stat = "identity", width = 0.6) +
   scale_fill_manual(values = c("cornflowerblue", "darkolivegreen3", "indianred2")) +
@@ -184,27 +192,51 @@ plot3
 
 ggsave("plot3.png", plot = plot3, path = "draft_figures")
 ```
-Combine maps and plots into one
+Combine maps and plots into one, with map on top spanning two columns, and two bar plots on the bottom filling two columns
 ```{r merging}
-library(cowplot)
-library(grid)
-library(gridExtra)
 library(ggpubr)
-plot_grid(plot2, plot3, labels = c('B', 'C'), nrow = 1, ncol = 2, rel_heights = c(1/1, 1/1))
-grid.newpage()
-grid.draw(ggplotGrob(plot2), ggplotGrob(plot3))
-row2<-grid.arrange(plot2, plot3, ncol = 2)
+ggarrange(
+  map1,                # First row with line plot
+  # Second row with box and dot plots
+  ggarrange(plot2, plot3, ncol = 2, labels = c("B", "C")), 
+  nrow = 2, 
+  labels = "A"       # Label of the line plot
+  ) 
+```
+```{r Playing around to make two bottom plots fit together better}
+#range
+plot2.5 <- ggplot(data = range_shift_summaries, aes(x=Range.edge, y = freq.posneg, fill = tempchange)) +
+  geom_bar(stat = "identity", width = 0.7) +
+  scale_fill_manual(values = c("cornflowerblue", "darkolivegreen3", "indianred2")) +
+  labs(x = "Focal Range Edge", y = "Proportion \nNot Expanding    |    Expanding      ") +
+  guides(fill = FALSE) +
+  geom_hline(yintercept = 0, col = "black", size = 1) +
+  theme_classic() +
+  scale_y_continuous(limits = c(-1,1), label = c("1", "0.5", "0", "0.5", "1")) +
+  coord_fixed(ratio = 1.7) +
+  scale_x_discrete(labels = c(x.label.levels[3], x.label.levels[1], x.label.levels[2])) +
+  theme(axis.text = element_text(color = "black", size = 13),  
+        axis.title = element_text(color = "black", size = 12),
+        legend.title = element_text(color = "black", size = 13, face = 2),
+        legend.text = element_text(color = "black", size = 13))
 
-ggarrange(plot2, plot3, ncol = 2, align = "v")
-plot_grid(map1, plot2, plot3, labels = c('B', 'C'), align = "v", nrow = 2, ncol = 2, rel_heights = c(1/2, 1/4, 1/4))
+#depth
+plot3.5 <- ggplot(data = depth_shift_summaries, aes(x = Depth, y = freq.posneg, fill = tempchange)) +
+  geom_bar(stat = "identity", width = 0.7) +
+  scale_fill_manual(values = c("cornflowerblue", "darkolivegreen3", "indianred2")) +
+  labs(x = "  ", y = "Proportion \nNot Expanding    |   Expanding    ", fill = "Direction of \nMovement") +
+  geom_hline(yintercept = 0, col = "black", size = 1) +
+  theme_classic() +
+  scale_y_continuous(limits = c(-1,1), label = c("1", "0.5", "0", "0.5", "1")) +
+  scale_x_discrete(label = c("Depth \nN=106\n")) +
+  coord_fixed(ratio = 1.7) +
+  theme(axis.text.y = element_text(color = "black", size = 13),  
+        axis.text.x = element_text(color = "black", size = 13),
+        axis.title.x = element_text(color = "black", size = 12),
+        axis.title.y = element_blank(),
+        legend.title = element_text(color = "black", size = 13, face = 2),
+        legend.text = element_text(color = "black", size = 13))
 
-ggarrange(map1,                                                 # First row with scatter plot
-          ggarrange(plot2, plot3, labels = c("B", "C")), # Second row with box and dot plots
-          nrow = 2, 
-          labels = "A"                                        # Labels of the scatter plot
-          ) 
-
-grid.arrange(map1, plot2, plot3, nrow = 2, 
-             layout_matrix = rbind(c(1,1), c(2,3)))
+ggarrange(plot2.5, plot3.5)
 ```
 
