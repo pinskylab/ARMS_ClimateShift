@@ -70,8 +70,8 @@ map1 <- ggplot() +
                        labels = c("Latitudinal Range", "Depth Range")) +
   theme_void() +
   theme(legend.position = "right",
-        legend.title = element_text(size = 13, face = 2),
-        legend.text = element_text(size = 12)) +
+        legend.title = element_text(color = "black", size = 14, face = 2),
+        legend.text = element_text(color = "black", size = 14)) +
   guides(colour = guide_legend(override.aes = list(size=3)))
 
 map1
@@ -188,7 +188,7 @@ plot3 <- ggplot(data = depth_shift_summaries, aes(x = Depth, y = freq.posneg, fi
         axis.title.y = element_blank(),
         legend.title = element_text(color = "black", size = 14, face = 2),
         legend.text = element_text(color = "black", size = 14),
-        plot.margin = margin(1,0,1.15,0, unit = "cm"))
+        plot.margin = margin(1.1,0,1.15,0, unit = "cm"))
 plot3
 
 
@@ -197,11 +197,11 @@ ggsave("plot3.png", plot = plot3, path = "draft_figures")
 Combine maps and plots into one, with map on top spanning two columns, and two bar plots on the bottom filling two columns
 ```{r Playing around to make two bottom plots fit together better}
 library(cowplot)
+library(ggpubr)
 bottom2 <- plot_grid(plot2, plot3, ncol = 2, labels = c("B", "C"))
 top1 <- plot_grid(map1, labels = c("A"))
 ggsave("plotBC.png", plot = bottom2, path = "draft_figures")
 ggsave("plotA.png", plot = top1, path = "draft_figures")
-
 
 
 #FINAL
