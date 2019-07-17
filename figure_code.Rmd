@@ -196,11 +196,18 @@ ggsave("plot3.png", plot = plot3, path = "draft_figures")
 ```
 Combine maps and plots into one, with map on top spanning two columns, and two bar plots on the bottom filling two columns
 ```{r Playing around to make two bottom plots fit together better}
+library(cowplot)
 bottom2 <- plot_grid(plot2, plot3, ncol = 2, labels = c("B", "C"))
 top1 <- plot_grid(map1, labels = c("A"))
 ggsave("plotBC.png", plot = bottom2, path = "draft_figures")
 ggsave("plotA.png", plot = top1, path = "draft_figures")
-bottom2
+
+
+
+#FINAL
 top1
+bottom2
+
+
 ```
 
