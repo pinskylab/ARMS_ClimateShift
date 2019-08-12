@@ -24,6 +24,7 @@ depth <- as.data.table(read.csv("data/poloczanska2013NCC/nceas.999.1_depth.csv")
 range <- as.data.table(read.csv("data/poloczanska2016frontiersmarinescience/table 2_cleaned.csv"))
 range[grepl("trailing", Range.edge), Range.edge := "Trailing"] #fixing lack of consistency in capitalization
 range$Range.edge <- factor(range$Range.edge) #making range.edge a factor
+levels(range$Range.edge) <- c("Center", "Leading", "Trailing")
 
 #just lat and long for depth
 depth_latlong <- depth[, c("lat", "long")][, type := "depth"]
@@ -78,20 +79,20 @@ map1
 
 
 
-ggsave("map1.png", plot = map1, device = NULL, path = "draft_figures")
+ggsave("map1.pdf", plot = map1, device = NULL, path = "draft_figures")
 
 
 ```
 
 Proportion of species bar plots. We will only need Range.edge and Shift
 ```{r data manipulation for range}
-range_shift <- range[,c("Range.edge", "Shift")][,Range.edge := factor(Range.edge)] #only need range edge and shift columns, and range.edge should be a factor
+range_shift <- range[,c("Range.edge", "Shift")] #only need range edge and shift columns
 
 table(range_shift$Range.edge, range_shift$Shift) #gives us numbers for each shift/range.edge combo
 
-range_shift[, cooler := ifelse(((Range.edge == "Leading" & Shift == "expansion")|(Range.edge == "Centre" & Shift == "expansion") | (Range.edge == "Trailing" & Shift == "contraction")) , 1, 0)] #if leading range edge and expansion OR centre range edge and expansion OR trailing range edge and contraction, it's moving towards cooler
+range_shift[, cooler := ifelse(((Range.edge == "Leading" & Shift == "expansion")|(Range.edge == "Center" & Shift == "expansion") | (Range.edge == "Trailing" & Shift == "contraction")) , 1, 0)] #if leading range edge and expansion OR center range edge and expansion OR trailing range edge and contraction, it's moving towards cooler
 
-range_shift[, warmer := ifelse(((Range.edge == "Leading" & Shift == "contraction")|(Range.edge == "Centre" & Shift == "contraction") | (Range.edge == "Trailing" & Shift == "expansion")) , 1, 0)] #if leading range edge and contraction OR centre range edge and contraction OR trailing range edge and expansion, it's moving towards warmer
+range_shift[, warmer := ifelse(((Range.edge == "Leading" & Shift == "contraction")|(Range.edge == "Center" & Shift == "contraction") | (Range.edge == "Trailing" & Shift == "expansion")) , 1, 0)] #if leading range edge and contraction OR center range edge and contraction OR trailing range edge and expansion, it's moving towards warmer
 
 range_shift[, nochange := ifelse(Shift == "no change", 1, 0)] #if it's not contracting or expanding, it's not moving towards a temperature change
 range_shift[, tempchange := as.factor(ifelse(cooler == 1, "Towards cooler", ifelse(warmer == 1, "Towards warmer", "No change")))] #putting cooler, warmer, no change into one column
@@ -108,7 +109,7 @@ range_shift_summaries <- as.data.table(range_shift_summaries)
 range_shift_summaries[, "freq.posneg" := ifelse(tempchange == "Towards warmer" | tempchange == "No change", as.numeric(paste0(freq*(-1))), as.numeric(paste0(freq)))]
 range_shift_summaries[, "x.label" := ifelse(Range.edge == "Leading", paste0("Leading \nn=", length(which(range_shift$Range.edge == "Leading"))), 
                                             ifelse(Range.edge == "Trailing", paste0("Trailing \nn=", length(which(range_shift$Range.edge == "Trailing"))), 
-                                                   paste0("Centre \nn=", length(which(range_shift$Range.edge == "Centre"))))
+                                                   paste0("Center \nn=", length(which(range_shift$Range.edge == "Center"))))
                                             )
                       ]
 #to help with x axis labeling
@@ -118,18 +119,18 @@ x.label.levels <- levels(range_shift_summaries$x.label)
 #to reorder coloring in plot for stacks of towards temp changes (cooler = blue, etc.)
 range_shift_summaries$tempchange <- factor(range_shift_summaries$tempchange, levels = c("Towards cooler","No change","Towards warmer"))
 
-#to rearrange order of bars (centre in middle)
-range_shift_summaries$Range.edge <- factor(range_shift_summaries$Range.edge, levels = c("Trailing", "Centre", "Leading"))
+#to rearrange order of bars (center in middle)
+range_shift_summaries$Range.edge <- factor(range_shift_summaries$Range.edge, levels = c("Trailing", "Center", "Leading"))
 
 ```
 
 Making barplot
 ```{r barplot for range}
 
-plot2 <- ggplot(data = range_shift_summaries, aes(x=Range.edge, y = freq.posneg, fill = tempchange)) +
-  geom_bar(stat = "identity", width = 0.7) +
+plot2 <- ggplot(data = range_shift_summaries, aes(x=Range.edge, y = freq.posneg, fill = tempchange, group = tempchange)) +
+  geom_bar(position = position_stack(reverse = TRUE), stat = "identity", width = 0.7) +
   scale_fill_manual(values = c("cornflowerblue", "darkolivegreen3", "indianred2")) +
-  labs(x = "\nFocal Range Edge", y = "Proportion \n\nNot Expanding    |    Expanding      \n") +
+  labs(x = "\nFocal Range Edge", y = "Proportion \n\nNot consistent    |    Consistent      \n") +
   guides(fill = FALSE) +
   geom_hline(yintercept = 0, col = "black", size = 1) +
   theme_classic() +
@@ -143,7 +144,7 @@ plot2 <- ggplot(data = range_shift_summaries, aes(x=Range.edge, y = freq.posneg,
 
 plot2
 
-ggsave("plot2.png", plot = plot2, path = "draft_figures")
+ggsave("plot2.pdf", plot = plot2, path = "draft_figures")
 
 #Parking lot
 #if we want to have a n for every subgroup
@@ -157,6 +158,7 @@ Data manipulation for depth barplots
 ```{r data manip for depth}
 depth_shift <- depth[,c("Deeper_shallower")]
 depth_shift[, tempchange := ifelse(Deeper_shallower == "Deeper", "Cooler", ifelse(Deeper_shallower == "Shallower", "Warmer", "No change"))]
+setorder(depth_shift, tempchange)
 
 depth_shift_summaries <- depth_shift %>%
   group_by(Deeper_shallower, tempchange) %>%
@@ -165,7 +167,7 @@ depth_shift_summaries <- depth_shift %>%
   mutate(label = paste0(Deeper_shallower, '\nN = ', n))
 
 depth_shift_summaries <- as.data.table(depth_shift_summaries)
-depth_shift_summaries[, "freq.posneg" := ifelse(tempchange == "Warmer" | tempchange == "No change", as.numeric(paste0(freq*(-1))), as.numeric(paste0(freq)))]
+depth_shift_summaries[, "freq.posneg" := ifelse(tempchange == "Warmer" | tempchange == "No change", as.numeric(paste0(freq*(-1))), as.numeric(paste0(freq)))][, tempchange := as.factor(tempchange)][, "tempchange_numeric" := ifelse(tempchange == "Warmer", 3, ifelse(tempchange == "No change", 2, 1))]
 
 #add dummy x variable for single stack
 depth_shift_summaries[, Depth := "depth"]
@@ -174,13 +176,13 @@ depth_shift_summaries[, Depth := "depth"]
 Making barplot
 ```{r barplots for depth}
 plot3 <- ggplot(data = depth_shift_summaries, aes(x = Depth, y = freq.posneg, fill = tempchange)) +
-  geom_bar(stat = "identity", width = 0.6) +
-  scale_fill_manual(values = c("cornflowerblue", "darkolivegreen3", "indianred2")) +
-  labs(x = "  ", y = "Proportion \nNot Expanding    |   Expanding    ", fill = "Direction of \nMovement") +
+  geom_bar(position = position_stack(reverse = TRUE), stat = "identity", width = 0.6) +
+  labs(x = "  ", fill = "Direction of Shift") +
   geom_hline(yintercept = 0, col = "black", size = 1) +
   theme_classic() +
+  scale_fill_manual(values = c("cornflowerblue", "darkolivegreen3", "indianred2")) +
   scale_y_continuous(limits = c(-1,1), label = c("1", "0.5", "0", "0.5", "1")) +
-  scale_x_discrete(label = c("Depth \nN=106\n")) +
+  scale_x_discrete(label = c("Depth \nn=106\n")) +
   coord_fixed(ratio = 1.5) +
   theme(axis.text.y = element_text(color = "black", size = 14),  
         axis.text.x = element_text(color = "black", size = 14),
@@ -192,7 +194,8 @@ plot3 <- ggplot(data = depth_shift_summaries, aes(x = Depth, y = freq.posneg, fi
 plot3
 
 
-ggsave("plot3.png", plot = plot3, path = "draft_figures")
+ggsave("plot3.pdf", plot = plot3, path = "draft_figures")
+
 ```
 Combine maps and plots into one, with map on top spanning two columns, and two bar plots on the bottom filling two columns
 ```{r Playing around to make two bottom plots fit together better}
@@ -200,8 +203,8 @@ library(cowplot)
 library(ggpubr)
 bottom2 <- plot_grid(plot2, plot3, ncol = 2, labels = c("B", "C"))
 top1 <- plot_grid(map1, labels = c("A"))
-ggsave("plotBC.png", plot = bottom2, path = "draft_figures")
-ggsave("plotA.png", plot = top1, path = "draft_figures")
+ggsave("plotBC.pdf", plot = bottom2, path = "draft_figures")
+ggsave("plotA.pdf", plot = top1, path = "draft_figures")
 
 
 #FINAL
